@@ -1,0 +1,96 @@
+---
+title: "Final Project Nkx2.2 binding in motor neurons and beta-like pancreatic cells"
+author: David Lorberbaum and Laura Hudish
+output:  
+    html_document:
+       highlight: tango
+---
+
+```{r install, message = F, warning = F}
+library(readr)
+library(tidyverse)
+library(dplyr)
+library(valr)
+```
+
+
+The purpose of this project is to compare Nkx2.2 binding locations in mouse pancreatic beta-like cells and mouse in vitro derived motor neurons using ChIP-seq data previously generated in lab. 
+
+###Hypothesis 
+Nkx2.2 will occupy mostly distinct regions of the genome in different developmental contexts. 
+
+#Min6 data manipulation
+
+```{r}
+#The code below shows the processing of the bam files from the MIN6 cells. We started with 3 input files and 3 experimental files. The code is commented because it would take too long to actually run. 
+
+#1) Convert bam files into bedfiles: 
+
+#convert all .bam files to .bg 
+#for file in *.bam; do echo $file;  bedtools genomecov -ibam $file -bg > ${file/.bam/.bg}; done
+
+#2) Call peaks with Macs2 including all 3 input files and 3 Nkx2.2 ChIP-seq files 
+
+#$macs2 callpeak -t Nkx2_2.1.cleaned.removed_duplicates.bg Nkx2_2.2.cleaned.removed_duplicates.bg Nkx2_2.3.cleaned.removed_duplicates.bg -c Input.1.cleaned.removed_duplicates.bg Input.2.cleaned.removed_duplicates.bg Input.3.cleaned.removed_duplicates.bg --nomodel -n Nkx2_2_MIN6
+
+#3) Isolate Peaks as txt file (chr, start, stop) 
+
+#$awk '{print $1,$2,$3}' Nkx2_2_MIN6_peaks.xls > Nkx2_2_MIN6_peaks.txt
+
+
+#4) Remove “chr” from column 1 , remove extraneous information at the top of the output file (grep), make tab delimited, make sure this is bedtools compatible, save as new file for comparison with Nkx2.2 binding in MN
+
+#$sed 's/^chr//' Nkx2_2_MIN6_peaks.txt | grep -v "^#" | awk '{OFS ="\t"} NR > 2 {print $1, $2, $3}' |  bedtools sort -i - > Nkx2_2_peaks.txt   
+```
+
+# Motor neuron data manipulation 
+```{r message = F, warning = F}
+#The following code imports the motor neuron data and creates a file with the location of Nkx2.2 binding containing chromosome number, start and end locations and gene name. 
+
+Nkx2.2 <- read_tsv("~/Desktop/Genome analysis workshop/Nkx2.2 peaks assigned to changed genes REAL.txt")
+separate(Nkx2.2, Coordinates, into = c("Chrom", "Start", "End"), sep = "[:-]") -> New_Nkx2.2_peaks
+select(New_Nkx2.2_peaks, Chrom, Start, End, Gene) -> mypeaks
+colnames(mypeaks) <- c("chrom", "start", "end", "Gene" ) 
+
+mypeaks <- mutate(mypeaks, 
+                  start = as.integer(start), 
+                  end = as.integer(end))
+mypeaks
+
+Nkx2_2_peaks <- read_bed("~/Desktop/Genome analysis workshop/Nkx2_2_peaks.txt")
+
+
+```
+
+
+# Comparison of Nkx2.2 bound sites in pancreatic cells and motor neurons
+```{r}
+# The code below uses valr to intersect our two data sets and looks for common peaks within neurons and pancreatic cells as well as unique peaks for each cell type. 
+bed_intersect(mypeaks, Nkx2_2_peaks) -> common
+write.table(common,                                                       # the thing to save
+            '~/Desktop/Genome analysis workshop/Common_genes.txt',           # where to save it
+            sep = '\t',                                                    # tab delimited
+            row.names = F,                                              # no row numbers
+            quote = F)   
+ 
+
+bed_subtract(mypeaks, Nkx2_2_peaks) -> neuro
+write.table(neuro,                                                       # the thing to save
+            '~/Desktop/Genome analysis workshop/Neuro_genes.txt',           # where to save it
+            sep = '\t',                                                    # tab delimited
+            row.names = F,                                              # no row numbers
+            quote = F) 
+bed_subtract(Nkx2_2_peaks, mypeaks) -> min6
+write.table(min6,                                                       # the thing to save
+            '~/Desktop/Genome analysis workshop/Min6_genes.txt',           # where to save it
+            sep = '\t',                                                    # tab delimited
+            row.names = F,                                              # no row numbers
+            quote = F) 
+
+common
+```
+
+
+
+
+
